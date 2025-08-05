@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# YOLO training outputs
+runs/
+*.weights
+*.pt
+!yolov8m.pt
+
+# Large datasets (keep organized folder structure but not all images)
+organized/*/
+!organized/*/.gitkeep
+
+# Test images
+test_*.jpg
+test_*.png
+
+# Backup files
+*_backup_*.json
+
+# Temporary files
+*.tmp
+*.temp
