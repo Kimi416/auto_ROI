@@ -1,0 +1,21 @@
+# Hard Negative Mining対応データセット設定（PAD-UFES-20形式）
+path: /Users/iinuma/Desktop/自動ROI
+
+# 学習・検証・テスト画像のパス
+train:
+  - fast_lesion_training/yolo_dataset/train/images
+  - datasets/negatives/images
+val: fast_lesion_training/yolo_dataset/val/images
+test: fast_lesion_training/yolo_dataset/test/images
+
+# クラス数（PAD-UFES-20準拠）
+nc: 6
+
+# クラス名（PAD-UFES-20準拠）
+names:
+  0: ACK  # Actinic keratosis
+  1: BCC  # Basal cell carcinoma
+  2: MEL  # Melanoma
+  3: NEV  # Nevus
+  4: SCC  # Squamous cell carcinoma
+  5: SEK  # Seborrheic keratosis
