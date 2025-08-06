@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>軽量アノテーションツール</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .left-panel {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            height: fit-content;
+        }
+        
+        .main-panel {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        
+        .file-input {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 2px dashed #3498db;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .navigation-controls {
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            margin: 5px;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background: #3498db;
+            color: white;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .disease-buttons {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .disease-btn {
+            padding: 12px;
+            border: 2px solid #ddd;
+            background: #f8f9fa;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .disease-btn.active {
+            background: #3498db;
+            color: white;
+        }
+        
+        .canvas-container {
+            position: relative;
+            border: 3px solid #34495e;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+            cursor: crosshair;
+        }
+        
+        .progress {
+            margin-top: 10px;
+            padding: 10px;
+            background: #3498db;
+            color: white;
+            border-radius: 5px;
+            text-align: center;
+        }
+        
+        .brush-size {
+            margin: 10px 0;
+        }
+        
+        .size-slider {
+            width: 100%;
+        }
+        
+        .lesion-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        .lesion-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-radius: 3px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .delete-btn {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 軽量アノテーションツール</h1>
+        <p>メモリ使用量を抑えた軽量版</p>
+    </div>
+
+    <div class="container">
+        <div class="left-panel">
+            <div class="file-input">
+                <input type="file" id="folderInput" webkitdirectory multiple style="margin-bottom: 10px;">
+                <div>フォルダを選択してください</div>
+            </div>
+
+            <div class="navigation-controls">
+                <button class="btn" id="prevImage">← 前</button>
+                <button class="btn" id="nextImage">次 →</button>
+                <div id="imageProgress" style="margin-top: 10px; text-align: center;">
+                    画像未選択
+                </div>
+            </div>
+
+            <div class="disease-selector">
+                <h3>病変タイプ</h3>
+                <div class="disease-buttons">
+                    <div class="disease-btn active" data-disease="Melasma">肝斑</div>
+                    <div class="disease-btn" data-disease="Solar_lentigo">日光性色素斑</div>
+                    <div class="disease-btn" data-disease="Nevus">母斑</div>
+                    <div class="disease-btn" data-disease="ADM">ADM</div>
+                    <div class="disease-btn" data-disease="Ephelis">雀卵斑</div>
+                </div>
+            </div>
+
+            <div class="tools">
+                <h3>ツール</h3>
+                <button class="btn" id="clearTool">全消去</button>
+                
+                <div class="brush-size">
+                    <label>筆サイズ: <span id="brushSizeValue">5</span></label>
+                    <input type="range" class="size-slider" id="brushSize" min="1" max="20" value="5">
+                </div>
+            </div>
+
+            <div class="lesion-list">
+                <h4>選択済み病変</h4>
+                <div id="lesionsList">なし</div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn" id="exportYolo" style="background: #27ae60;">YOLO保存</button>
+                <button class="btn" id="exportAll" style="background: #e67e22;">一括保存</button>
+            </div>
+        </div>
+
+        <div class="main-panel">
+            <div class="canvas-container">
+                <canvas id="imageCanvas"></canvas>
+                <canvas id="annotationCanvas"></canvas>
+            </div>
+
+            <div class="progress" id="progressInfo" style="display:none;">
+                進捗: <span id="progressText">0/0</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class LiteAnnotationTool {
+            constructor() {
+                this.imageCanvas = document.getElementById('imageCanvas');
+                this.annotationCanvas = document.getElementById('annotationCanvas');
+                this.imageCtx = this.imageCanvas.getContext('2d');
+                this.annotationCtx = this.annotationCanvas.getContext('2d');
+                
+                this.currentImage = null;
+                this.currentFile = null;
+                this.currentDisease = 'Melasma';
+                this.isDrawing = false;
+                this.brushSize = 5;
+                this.currentColor = '#e74c3c';
+                
+                this.annotations = [];
+                this.currentPath = [];
+                
+                this.imageFiles = [];
+                this.currentImageIndex = 0;
+                this.processedImages = new Set();
+                
+                this.initEventListeners();
+                this.setupCanvas();
+            }
+            
+            initEventListeners() {
+                // フォルダ入力
+                document.getElementById('folderInput').addEventListener('change', (e) => {
+                    this.loadFolder(e.target.files);
+                });
+                
+                // ナビゲーション
+                document.getElementById('prevImage').addEventListener('click', () => {
+                    this.previousImage();
+                });
+                
+                document.getElementById('nextImage').addEventListener('click', () => {
+                    this.nextImage();
+                });
+                
+                // 病変タイプ選択
+                document.querySelectorAll('.disease-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        document.querySelectorAll('.disease-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.currentDisease = e.target.dataset.disease;
+                        this.updateColor();
+                    });
+                });
+                
+                // ツール
+                document.getElementById('clearTool').addEventListener('click', () => {
+                    this.clearAll();
+                });
+                
+                // ブラシサイズ
+                document.getElementById('brushSize').addEventListener('input', (e) => {
+                    this.brushSize = parseInt(e.target.value);
+                    document.getElementById('brushSizeValue').textContent = this.brushSize;
+                });
+                
+                // エクスポート
+                document.getElementById('exportYolo').addEventListener('click', () => {
+                    this.exportYOLO();
+                });
+                
+                document.getElementById('exportAll').addEventListener('click', () => {
+                    this.exportAllYolo();
+                });
+                
+                // キーボード
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowRight' || e.key === ' ') {
+                        e.preventDefault();
+                        this.nextImage();
+                    } else if (e.key === 'ArrowLeft') {
+                        e.preventDefault();
+                        this.previousImage();
+                    }
+                });
+            }
+            
+            setupCanvas() {
+                this.annotationCanvas.style.position = 'absolute';
+                this.annotationCanvas.style.top = '0';
+                this.annotationCanvas.style.left = '0';
+                
+                // マウスイベント
+                this.annotationCanvas.addEventListener('mousedown', (e) => {
+                    if (!this.currentImage) return;
+                    this.startDrawing(e);
+                });
+                
+                this.annotationCanvas.addEventListener('mousemove', (e) => {
+                    if (!this.currentImage || !this.isDrawing) return;
+                    this.draw(e);
+                });
+                
+                this.annotationCanvas.addEventListener('mouseup', () => {
+                    this.stopDrawing();
+                });
+            }
+            
+            updateColor() {
+                const colorMap = {
+                    'Melasma': '#e74c3c',
+                    'Solar_lentigo': '#3498db', 
+                    'Nevus': '#27ae60',
+                    'ADM': '#f39c12',
+                    'Ephelis': '#9b59b6'
+                };
+                this.currentColor = colorMap[this.currentDisease] || '#e74c3c';
+            }
+            
+            loadFolder(files) {
+                this.imageFiles = Array.from(files).filter(file => 
+                    file.type.startsWith('image/')
+                ).sort((a, b) => a.name.localeCompare(b.name));
+                
+                if (this.imageFiles.length === 0) {
+                    alert('画像ファイルが見つかりません');
+                    return;
+                }
+                
+                this.currentImageIndex = 0;
+                this.loadCurrentImage();
+                this.updateProgress();
+            }
+            
+            loadCurrentImage() {
+                if (this.imageFiles.length === 0) return;
+                
+                const currentFile = this.imageFiles[this.currentImageIndex];
+                this.loadImage(currentFile);
+            }
+            
+            loadImage(file) {
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        this.currentImage = img;
+                        this.currentFile = file;
+                        this.setupCanvasSize(img);
+                        this.drawImage();
+                        this.loadExistingAnnotations();
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+            
+            setupCanvasSize(img) {
+                const maxWidth = 700;
+                const maxHeight = 500;
+                
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+                
+                if (height > maxHeight) {
+                    width = (width * maxHeight) / height;
+                    height = maxHeight;
+                }
+                
+                this.imageCanvas.width = width;
+                this.imageCanvas.height = height;
+                this.annotationCanvas.width = width;
+                this.annotationCanvas.height = height;
+                
+                this.scaleX = img.width / width;
+                this.scaleY = img.height / height;
+            }
+            
+            drawImage() {
+                if (!this.currentImage) return;
+                
+                this.imageCtx.clearRect(0, 0, this.imageCanvas.width, this.imageCanvas.height);
+                this.imageCtx.drawImage(
+                    this.currentImage,
+                    0, 0,
+                    this.imageCanvas.width,
+                    this.imageCanvas.height
+                );
+            }
+            
+            previousImage() {
+                if (this.imageFiles.length === 0) return;
+                
+                this.autoSaveAnnotations();
+                this.currentImageIndex = Math.max(0, this.currentImageIndex - 1);
+                this.loadCurrentImage();
+                this.updateProgress();
+            }
+            
+            nextImage() {
+                if (this.imageFiles.length === 0) return;
+                
+                this.autoSaveAnnotations();
+                this.currentImageIndex = Math.min(this.imageFiles.length - 1, this.currentImageIndex + 1);
+                this.loadCurrentImage();
+                this.updateProgress();
+            }
+            
+            updateProgress() {
+                if (this.imageFiles.length === 0) return;
+                
+                const progressText = `${this.currentImageIndex + 1} / ${this.imageFiles.length}`;
+                const processedCount = this.processedImages.size;
+                const progressInfo = `${progressText} (済み: ${processedCount})`;
+                
+                document.getElementById('imageProgress').textContent = progressInfo;
+                document.getElementById('progressInfo').style.display = 'block';
+                document.getElementById('progressText').textContent = `${processedCount}/${this.imageFiles.length}`;
+            }
+            
+            getMousePos(e) {
+                const rect = this.annotationCanvas.getBoundingClientRect();
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            }
+            
+            startDrawing(e) {
+                this.isDrawing = true;
+                const pos = this.getMousePos(e);
+                
+                this.currentPath = [{
+                    x: pos.x,
+                    y: pos.y,
+                    disease: this.currentDisease,
+                    color: this.currentColor
+                }];
+            }
+            
+            draw(e) {
+                if (!this.isDrawing) return;
+                
+                const pos = this.getMousePos(e);
+                
+                this.annotationCtx.strokeStyle = this.currentColor;
+                this.annotationCtx.lineWidth = this.brushSize;
+                this.annotationCtx.lineCap = 'round';
+                
+                this.annotationCtx.beginPath();
+                const lastPoint = this.currentPath[this.currentPath.length - 1];
+                this.annotationCtx.moveTo(lastPoint.x, lastPoint.y);
+                this.annotationCtx.lineTo(pos.x, pos.y);
+                this.annotationCtx.stroke();
+                
+                this.currentPath.push({
+                    x: pos.x,
+                    y: pos.y,
+                    disease: this.currentDisease,
+                    color: this.currentColor
+                });
+            }
+            
+            stopDrawing() {
+                if (this.isDrawing && this.currentPath.length > 0) {
+                    this.annotations.push({
+                        id: Date.now(),
+                        disease: this.currentDisease,
+                        color: this.currentColor,
+                        path: [...this.currentPath],
+                        timestamp: new Date().toISOString()
+                    });
+                    
+                    this.updateLesionsList();
+                }
+                
+                this.isDrawing = false;
+                this.currentPath = [];
+            }
+            
+            clearAll() {
+                this.annotationCtx.clearRect(0, 0, this.annotationCanvas.width, this.annotationCanvas.height);
+                this.annotations = [];
+                this.updateLesionsList();
+            }
+            
+            updateLesionsList() {
+                const listElement = document.getElementById('lesionsList');
+                
+                if (this.annotations.length === 0) {
+                    listElement.innerHTML = 'なし';
+                    return;
+                }
+                
+                const listHTML = this.annotations.map((annotation) => `
+                    <div class="lesion-item">
+                        <div style="color: ${annotation.color};">● ${annotation.disease}</div>
+                        <button class="delete-btn" onclick="annotationTool.deleteLesion(${annotation.id})">削除</button>
+                    </div>
+                `).join('');
+                
+                listElement.innerHTML = listHTML;
+            }
+            
+            deleteLesion(id) {
+                this.annotations = this.annotations.filter(a => a.id !== id);
+                this.redrawAnnotations();
+                this.updateLesionsList();
+            }
+            
+            redrawAnnotations() {
+                this.annotationCtx.clearRect(0, 0, this.annotationCanvas.width, this.annotationCanvas.height);
+                
+                this.annotations.forEach(annotation => {
+                    if (annotation.path.length < 2) return;
+                    
+                    this.annotationCtx.strokeStyle = annotation.color;
+                    this.annotationCtx.lineWidth = this.brushSize;
+                    this.annotationCtx.lineCap = 'round';
+                    
+                    this.annotationCtx.beginPath();
+                    this.annotationCtx.moveTo(annotation.path[0].x, annotation.path[0].y);
+                    
+                    for (let i = 1; i < annotation.path.length; i++) {
+                        this.annotationCtx.lineTo(annotation.path[i].x, annotation.path[i].y);
+                    }
+                    
+                    this.annotationCtx.stroke();
+                });
+            }
+            
+            autoSaveAnnotations() {
+                if (this.annotations.length > 0 && this.currentFile) {
+                    const saveData = {
+                        fileName: this.currentFile.name,
+                        annotations: this.annotations,
+                        timestamp: new Date().toISOString()
+                    };
+                    
+                    sessionStorage.setItem(`annotation_${this.currentFile.name}`, JSON.stringify(saveData));
+                    this.processedImages.add(this.currentFile.name);
+                }
+            }
+            
+            loadExistingAnnotations() {
+                if (!this.currentFile) return;
+                
+                const savedData = sessionStorage.getItem(`annotation_${this.currentFile.name}`);
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    this.annotations = data.annotations || [];
+                    this.redrawAnnotations();
+                    this.updateLesionsList();
+                    this.processedImages.add(this.currentFile.name);
+                } else {
+                    this.annotations = [];
+                    this.annotationCtx.clearRect(0, 0, this.annotationCanvas.width, this.annotationCanvas.height);
+                    this.updateLesionsList();
+                }
+            }
+            
+            exportYOLO() {
+                if (this.annotations.length === 0) {
+                    alert('アノテーションがありません');
+                    return;
+                }
+                
+                const classMap = {
+                    'Melasma': 0,
+                    'Solar_lentigo': 1,
+                    'Nevus': 2,
+                    'ADM': 3,
+                    'Ephelis': 4
+                };
+                
+                let yoloData = '';
+                
+                this.annotations.forEach(annotation => {
+                    if (annotation.path.length < 3) return;
+                    
+                    const classId = classMap[annotation.disease] || 0;
+                    
+                    const realPath = annotation.path.map(point => ({
+                        x: point.x * this.scaleX,
+                        y: point.y * this.scaleY
+                    }));
+                    
+                    const xs = realPath.map(p => p.x);
+                    const ys = realPath.map(p => p.y);
+                    
+                    const minX = Math.min(...xs);
+                    const maxX = Math.max(...xs);
+                    const minY = Math.min(...ys);
+                    const maxY = Math.max(...ys);
+                    
+                    const centerX = (minX + maxX) / 2 / this.currentImage.width;
+                    const centerY = (minY + maxY) / 2 / this.currentImage.height;
+                    const width = (maxX - minX) / this.currentImage.width;
+                    const height = (maxY - minY) / this.currentImage.height;
+                    
+                    yoloData += `${classId} ${centerX.toFixed(6)} ${centerY.toFixed(6)} ${width.toFixed(6)} ${height.toFixed(6)}\n`;
+                });
+                
+                this.downloadFile(yoloData, 'annotation.txt', 'text/plain');
+            }
+            
+            exportAllYolo() {
+                if (this.processedImages.size === 0) {
+                    alert('アノテーション済み画像がありません');
+                    return;
+                }
+                
+                let allData = '';
+                let count = 0;
+                
+                this.processedImages.forEach(fileName => {
+                    const savedData = sessionStorage.getItem(`annotation_${fileName}`);
+                    if (savedData) {
+                        const data = JSON.parse(savedData);
+                        allData += `\n=== ${fileName} ===\n`;
+                        
+                        if (data.annotations && data.annotations.length > 0) {
+                            data.annotations.forEach(annotation => {
+                                allData += `${annotation.disease}: ${annotation.path.length} points\n`;
+                            });
+                            count++;
+                        }
+                    }
+                });
+                
+                if (count === 0) {
+                    alert('エクスポート可能なデータがありません');
+                    return;
+                }
+                
+                this.downloadFile(allData, `all_annotations_${count}files.txt`, 'text/plain');
+                alert(`${count}枚分のアノテーションをエクスポートしました`);
+            }
+            
+            downloadFile(content, filename, contentType) {
+                const blob = new Blob([content], { type: contentType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+            }
+        }
+        
+        // 初期化
+        const annotationTool = new LiteAnnotationTool();
+    </script>
+</body>
+</html>

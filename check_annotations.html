@@ -1,0 +1,137 @@
+<\!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>アノテーションデータ確認</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .annotation-item { 
+            border: 1px solid #ddd; 
+            margin: 10px 0; 
+            padding: 15px; 
+            border-radius: 5px; 
+            background: #f9f9f9;
+        }
+        .filename { font-weight: bold; color: #2c3e50; }
+        .disease-count { color: #e74c3c; font-size: 14px; }
+        .timestamp { color: #7f8c8d; font-size: 12px; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 5px; cursor: pointer; }
+        .export-btn { background: #27ae60; color: white; }
+        .clear-btn { background: #e74c3c; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🔍 アノテーションデータ確認ツール</h1>
+    
+    <div>
+        <button class="export-btn" onclick="showAllData()">全データ表示</button>
+        <button class="export-btn" onclick="exportToFile()">データをファイル出力</button>
+        <button class="clear-btn" onclick="clearSpecificData()">特定データ削除</button>
+    </div>
+    
+    <div id="results"></div>
+
+    <script>
+        function showAllData() {
+            const results = document.getElementById('results');
+            const savedKeys = Object.keys(localStorage).filter(key => key.startsWith('annotation_'));
+            
+            if (savedKeys.length === 0) {
+                results.innerHTML = '<p>保存済みアノテーションが見つかりません。</p>';
+                return;
+            }
+            
+            let html = `<h2>保存済みアノテーション: ${savedKeys.length}件</h2>`;
+            
+            savedKeys.forEach(key => {
+                const fileName = key.replace('annotation_', '');
+                const data = JSON.parse(localStorage.getItem(key));
+                const annotationCount = data.annotations ? data.annotations.length : 0;
+                
+                html += `
+                    <div class="annotation-item">
+                        <div class="filename">📁 ${fileName}</div>
+                        <div class="disease-count">病変数: ${annotationCount}個</div>
+                        <div class="timestamp">保存日時: ${data.timestamp || '不明'}</div>
+                        <button onclick="showDetail('${key}')">詳細表示</button>
+                        <button onclick="deleteData('${key}')" style="background: #e74c3c; color: white;">削除</button>
+                    </div>
+                `;
+            });
+            
+            results.innerHTML = html;
+        }
+        
+        function showDetail(key) {
+            const data = JSON.parse(localStorage.getItem(key));
+            let detail = `ファイル: ${data.fileName}\n`;
+            detail += `病変数: ${data.annotations.length}\n\n`;
+            
+            data.annotations.forEach((ann, index) => {
+                detail += `${index + 1}. ${ann.disease} (${ann.path.length}点)\n`;
+            });
+            
+            alert(detail);
+        }
+        
+        function deleteData(key) {
+            if (confirm(`${key.replace('annotation_', '')} のデータを削除しますか？`)) {
+                localStorage.removeItem(key);
+                showAllData();
+                alert('削除完了');
+            }
+        }
+        
+        function exportToFile() {
+            const savedKeys = Object.keys(localStorage).filter(key => key.startsWith('annotation_'));
+            if (savedKeys.length === 0) {
+                alert('エクスポートするデータがありません');
+                return;
+            }
+            
+            let exportData = `アノテーションデータエクスポート\n作成日時: ${new Date().toLocaleString()}\n\n`;
+            
+            savedKeys.forEach(key => {
+                const data = JSON.parse(localStorage.getItem(key));
+                exportData += `=== ${data.fileName} ===\n`;
+                exportData += `病変数: ${data.annotations.length}\n`;
+                exportData += `保存日時: ${data.timestamp}\n`;
+                
+                data.annotations.forEach((ann, index) => {
+                    exportData += `  ${index + 1}. ${ann.disease} (${ann.path.length}点の描画)\n`;
+                });
+                
+                exportData += `\n`;
+            });
+            
+            const blob = new Blob([exportData], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `annotation_data_${new Date().getTime()}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+        
+        function clearSpecificData() {
+            const fileName = prompt('削除したいファイル名を入力してください（例: image001.jpg）:');
+            if (fileName) {
+                const key = `annotation_${fileName}`;
+                if (localStorage.getItem(key)) {
+                    localStorage.removeItem(key);
+                    alert(`${fileName} のデータを削除しました`);
+                    showAllData();
+                } else {
+                    alert(`${fileName} のデータが見つかりません`);
+                }
+            }
+        }
+        
+        // 自動実行
+        window.onload = function() {
+            showAllData();
+        };
+    </script>
+</body>
+</html>
+EOF < /dev/null
