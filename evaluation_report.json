@@ -1,0 +1,16 @@
+{
+  "timestamp": "2025-08-07T15:08:16.584381",
+  "model_path": "/Users/iinuma/Desktop/自動ROI/yolo_dataset/models/lesion_detection_v2_50epochs/weights/best.pt",
+  "validation_metrics": {
+    "mAP50": 0.4866148854695717,
+    "mAP50-95": 0.2847900876207012,
+    "precision": 0.5390367478442605,
+    "recall": 0.4474672438803582
+  },
+  "test_metrics": {
+    "mAP50": 0.33287529123647813,
+    "mAP50-95": 0.15053553187292348,
+    "precision": 0.5736071711501617,
+    "recall": 0.32648287385129493
+  }
+}

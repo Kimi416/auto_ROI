@@ -37,6 +37,7 @@ class LesionAnnotator:
         self.current_image = None
         self.display_image = None
         self.original_image = None
+        self.temp_display = None  # 描画中の一時表示用
         
         # アノテーション情報
         self.annotations = []
@@ -99,13 +100,21 @@ class LesionAnnotator:
         elif event == cv2.EVENT_MOUSEMOVE:
             if self.drawing:
                 self.current_annotation.append((x, y))
-                # リアルタイム描画
+                # リアルタイム描画（滑らかな線）
                 if len(self.current_annotation) > 1:
-                    self.display_image = self.current_image.copy()
-                    self.draw_annotations()
+                    # 既存のアノテーションを含む画像をベースに
+                    temp_image = self.current_image.copy()
+                    self.draw_annotations_on_image(temp_image)
+                    
+                    # 現在描画中の線を表示
                     pts = np.array(self.current_annotation, np.int32)
-                    cv2.polylines(self.display_image, [pts], False, 
-                                self.colors[self.current_disease], 2)
+                    # 描画中の線を太く明るい色で
+                    cv2.polylines(temp_image, [pts], False, 
+                                (0, 255, 255), 4)  # 黄色で太く
+                    # 始点を円で強調
+                    cv2.circle(temp_image, self.current_annotation[0], 5, (0, 255, 0), -1)
+                    
+                    self.temp_display = temp_image
                     
         elif event == cv2.EVENT_LBUTTONUP:
             if self.drawing:
@@ -119,21 +128,32 @@ class LesionAnnotator:
                     self.current_annotation = []
                     self.display_image = self.current_image.copy()
                     self.draw_annotations()
+                    print(f"病変追加: {self.disease_types[self.current_disease].split('(')[0]} (合計: {len(self.annotations)}個)")
     
     def draw_annotations(self):
-        """全アノテーションを描画"""
-        for ann in self.annotations:
+        """全アノテーションを描画（display_imageに）"""
+        self.draw_annotations_on_image(self.display_image)
+    
+    def draw_annotations_on_image(self, image):
+        """指定された画像にアノテーションを描画"""
+        for i, ann in enumerate(self.annotations):
             pts = np.array(ann['points'], np.int32)
-            cv2.fillPoly(self.display_image, [pts], 
-                        (*self.colors[ann['disease']], 100))
-            cv2.polylines(self.display_image, [pts], True, 
-                         self.colors[ann['disease']], 2)
+            # 半透明の塗りつぶし
+            overlay = image.copy()
+            cv2.fillPoly(overlay, [pts], self.colors[ann['disease']])
+            cv2.addWeighted(overlay, 0.3, image, 0.7, 0, image)
+            # 輪郭線を太く
+            cv2.polylines(image, [pts], True, 
+                         self.colors[ann['disease']], 3)
             
-            # 病変タイプラベル
+            # 病変番号とタイプラベル
             if len(ann['points']) > 0:
                 x, y = ann['points'][0]
-                label = self.disease_types[ann['disease']].split('(')[0]
-                cv2.putText(self.display_image, label, (x, y-5),
+                label = f"{i+1}. {self.disease_types[ann['disease']].split('(')[0]}"
+                # 背景付きテキスト
+                (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 2)
+                cv2.rectangle(image, (x-2, y-h-5), (x+w+2, y), (255, 255, 255), -1)
+                cv2.putText(image, label, (x, y-5),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.5,
                            self.colors[ann['disease']], 2)
     
@@ -191,29 +211,48 @@ class LesionAnnotator:
     
     def load_image(self):
         """現在のインデックスの画像を読み込み"""
-        if 0 <= self.current_index < len(self.image_files):
-            img_path = self.image_files[self.current_index]
-            self.original_image = cv2.imread(str(img_path))
-            
-            # リサイズ（表示用）
-            h, w = self.original_image.shape[:2]
-            max_size = 800
-            if w > max_size or h > max_size:
-                scale = max_size / max(w, h)
-                new_w = int(w * scale)
-                new_h = int(h * scale)
-                self.current_image = cv2.resize(self.original_image, (new_w, new_h))
-            else:
-                self.current_image = self.original_image.copy()
-            
-            self.display_image = self.current_image.copy()
-            self.annotations = []
-            
-            # 既存のアノテーション確認
-            base_name = img_path.stem
-            label_file = self.output_dir / "labels" / f"{base_name}.txt"
-            if label_file.exists():
-                print(f"既存のアノテーションあり: {base_name}")
+        try:
+            if 0 <= self.current_index < len(self.image_files):
+                img_path = self.image_files[self.current_index]
+                self.original_image = cv2.imread(str(img_path))
+                
+                if self.original_image is None:
+                    print(f"⚠️ 画像読み込み失敗: {img_path}")
+                    return False
+                
+                # メモリ解放
+                if self.current_image is not None:
+                    del self.current_image
+                if self.display_image is not None:
+                    del self.display_image
+                if self.temp_display is not None:
+                    del self.temp_display
+                    self.temp_display = None
+                
+                # リサイズ（表示用）- より小さいサイズに
+                h, w = self.original_image.shape[:2]
+                max_size = 600  # 800から600に縮小
+                if w > max_size or h > max_size:
+                    scale = max_size / max(w, h)
+                    new_w = int(w * scale)
+                    new_h = int(h * scale)
+                    self.current_image = cv2.resize(self.original_image, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                else:
+                    self.current_image = self.original_image.copy()
+                
+                self.display_image = self.current_image.copy()
+                self.annotations = []
+                
+                # 既存のアノテーション確認
+                base_name = img_path.stem
+                label_file = self.output_dir / "labels" / f"{base_name}.txt"
+                if label_file.exists():
+                    print(f"既存のアノテーションあり: {base_name}")
+                
+                return True
+        except Exception as e:
+            print(f"❌ エラー: {e}")
+            return False
     
     def run(self):
         """メインループ"""
@@ -223,30 +262,45 @@ class LesionAnnotator:
         self.load_image()
         
         print("\n=== 操作方法 ===")
-        print("マウス左ドラッグ: 病変領域を描画")
-        print("1-8: 病変タイプ選択")
-        print("n/→: 次の画像")
-        print("p/←: 前の画像")
-        print("s: 保存")
-        print("c: クリア")
-        print("z: 最後のアノテーションを削除")
-        print("q/ESC: 終了")
+        print("🖱️  マウス左ドラッグ: フリーハンドで病変領域を描画")
+        print("⌨️  1-8: 病変タイプ選択")
+        print("➡️  n/→/スペース: 次の画像へ（自動保存）")
+        print("⬅️  p/←: 前の画像へ")
+        print("💾 s: 現在の画像を保存")
+        print("🗑️  c: 全クリア | z: 最後の病変を削除")
+        print("❌ q/ESC: 終了")
         print("================\n")
+        print("💡 ヒント: 複数の病変を次々に描画できます")
         
         while True:
-            # 情報表示
-            info_img = self.display_image.copy()
+            try:
+                # 描画中の場合は一時表示を使用
+                if self.drawing and self.temp_display is not None:
+                    info_img = self.temp_display.copy()
+                else:
+                    info_img = self.display_image.copy()
+            except Exception as e:
+                print(f"⚠️ 表示エラー: {e}")
+                self.load_image()
+                continue
             
-            # ステータス表示
-            status = f"Image: {self.current_index + 1}/{len(self.image_files)}"
-            disease_name = self.disease_types[self.current_disease]
-            status += f" | Disease: {disease_name}"
-            status += f" | Annotations: {len(self.annotations)}"
+            # ステータス表示（より見やすく）
+            h, w = info_img.shape[:2]
             
-            cv2.putText(info_img, status, (10, 30),
+            # 上部ステータスバー
+            cv2.rectangle(info_img, (0, 0), (w, 50), (50, 50, 50), -1)
+            
+            status_text = f"[{self.current_index + 1}/{len(self.image_files)}] "
+            status_text += f"病変: {len(self.annotations)}個 | "
+            status_text += f"選択中: {self.disease_types[self.current_disease].split('(')[0]}"
+            
+            cv2.putText(info_img, status_text, (10, 30),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.putText(info_img, status, (10, 30),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 1)
+            
+            # ショートカットヒント（右上）
+            hint = "Space: 次へ | z: 削除"
+            cv2.putText(info_img, hint, (w-250, 30),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
             
             cv2.imshow('Annotation Tool', info_img)
             
@@ -254,20 +308,39 @@ class LesionAnnotator:
             
             # キーボード操作
             if key == ord('q') or key == 27:  # ESC
+                self.save_annotations()
                 self.save_progress()
                 break
                 
-            elif key == ord('n') or key == 83:  # 右矢印
-                self.save_annotations()
-                self.current_index = min(self.current_index + 1, len(self.image_files) - 1)
-                self.load_image()
-                self.save_progress()
+            elif key == ord('n') or key == 83 or key == ord(' '):  # 右矢印またはスペース
+                try:
+                    self.save_annotations()
+                    if self.current_index < len(self.image_files) - 1:
+                        self.current_index += 1
+                        if not self.load_image():
+                            print("⚠️ 画像読み込みエラー、次の画像へ")
+                            self.current_index += 1
+                            self.load_image()
+                        self.save_progress()
+                        print(f"📸 画像 {self.current_index + 1}/{len(self.image_files)}")
+                    else:
+                        print("✅ 最後の画像です")
+                except Exception as e:
+                    print(f"❌ エラー: {e}")
                 
             elif key == ord('p') or key == 81:  # 左矢印
-                self.save_annotations()
-                self.current_index = max(self.current_index - 1, 0)
-                self.load_image()
-                self.save_progress()
+                try:
+                    self.save_annotations()
+                    if self.current_index > 0:
+                        self.current_index -= 1
+                        if not self.load_image():
+                            print("⚠️ 画像読み込みエラー、前の画像へ")
+                            self.current_index -= 1
+                            self.load_image()
+                        self.save_progress()
+                        print(f"📸 画像 {self.current_index + 1}/{len(self.image_files)}")
+                except Exception as e:
+                    print(f"❌ エラー: {e}")
                 
             elif key == ord('s'):
                 self.save_annotations()

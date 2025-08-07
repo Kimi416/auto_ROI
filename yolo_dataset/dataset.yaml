@@ -1,0 +1,14 @@
+names:
+  0: Melasma
+  1: Solar_lentigo
+  2: Nevus
+  3: ADM
+  4: Ephelis
+  5: Seborrheic_keratosis
+  6: Basal_cell_carcinoma
+  7: Malignant_melanoma
+nc: 8
+path: /Users/iinuma/Desktop/自動ROI/yolo_dataset
+test: test/images
+train: train/images
+val: val/images
